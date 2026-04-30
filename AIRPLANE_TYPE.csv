@@ -1,0 +1,11 @@
+Type_name,Company,Max_seats
+737,Boeing,189
+757,Boeing,200
+767,Boeing,260
+777,Boeing,350
+787,Boeing,290
+A319,Airbus,156
+A320,Airbus,180
+A321,Airbus,220
+A330,Airbus,300
+A350,Airbus,350

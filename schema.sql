@@ -1,11 +1,11 @@
-CREATE DATABASE FlightDB;
-USE FlightDB;
+CREATE DATABASE FlightDB2;
+USE FlightDB2;
 
 CREATE TABLE airports (
        airport_code VARCHAR(3) PRIMARY KEY,
        city VARCHAR(50) NOT NULL,
        state VARCHAR(50),
-       name VARCHAR(50)
+       name VARCHAR(100)
 );
 
 CREATE TABLE airplane_types (
@@ -15,9 +15,9 @@ CREATE TABLE airplane_types (
 );
 
 CREATE TABLE airplanes (
-       airplane_id INT PRIMARY KEY,
+       airplane_id VARCHAR(15) PRIMARY KEY,
        total_no_of_seats INT CHECK (total_no_of_seats > 0),
-       typename VARCHAR(50),
+       typename VARCHAR(50), -- updated typename from int to varchar--
 
        FOREIGN KEY (typename) REFERENCES airplane_types(typename)
 );
@@ -29,22 +29,22 @@ CREATE TABLE flights (
 );
 
 CREATE TABLE fares (
-       code INT,
        number VARCHAR(6),
+       code VARCHAR(15),  -- updated code to varchar --
        amount INT CHECK (amount > 0),
        restriction VARCHAR(50),
 
-       PRIMARY KEY (code, number),
+       PRIMARY KEY (code, number), 
 
        FOREIGN KEY (number) REFERENCES flights(number)
 );
 
 CREATE TABLE flight_legs (
+       number VARCHAR(6), -- moved number to match csv -- 
        leg_no INT,
-       number VARCHAR(6),
        dep_airport_code VARCHAR(3) NOT NULL,
-       scheduled_dep_time TIME NOT NULL,
        arr_airport_code VARCHAR(3) NOT NULL,
+       scheduled_dep_time TIME NOT NULL,
        scheduled_arr_time TIME NOT NULL,
 
        PRIMARY KEY (leg_no, number),
@@ -55,11 +55,11 @@ CREATE TABLE flight_legs (
 );
 
 CREATE TABLE leg_instances (
+       number VARCHAR(6), -- moved number adjusted for csv --
+       leg_no INT, -- moved leg_no for csv --
        date DATE,
-       leg_no INT,
-       number VARCHAR(6),
        no_of_avail_seats INT CHECK (no_of_avail_seats >= 0),
-       airplane_id INT,
+       airplane_id VARCHAR(15),
 
        PRIMARY KEY (date, leg_no, number),
 
@@ -67,15 +67,78 @@ CREATE TABLE leg_instances (
        FOREIGN KEY (airplane_id) REFERENCES airplanes(airplane_id)
 );
 
+-- NOTE: THIS WILL HAVE TO BE UPDATED --
 CREATE TABLE seats (
-       seat_no INT,
+       airplane_id VARCHAR(15), -- added for csv
+       seat_no VARCHAR(3), -- updated to VARCHAR(3) -- 
+       code VARCHAR(15),  -- added code for class column.
        date DATE,
        leg_no INT,
        number VARCHAR(6),
-       customer_name VARCHAR(50) NOT NULL,
+       customer_name VARCHAR(50), -- changed to optional i.e. not NOT NULL
        cphone VARCHAR(10),
 
-       PRIMARY KEY (seat_no, date, leg_no, number),
+       PRIMARY KEY (airplane_id, seat_no),  -- updated pk, will not the same for mile3
 
-       FOREIGN KEY (date, leg_no, number) REFERENCES leg_instances(date, leg_no, number)
+       FOREIGN KEY (date, leg_no, number) REFERENCES leg_instances(date, leg_no, number),
+       FOREIGN KEY (airplane_id) REFERENCES airplanes(airplane_id)
 );
+
+
+-- Load CSV files
+LOAD DATA LOCAL INFILE 'AIRPORT.csv' 
+INTO TABLE airports 
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"' 
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
+-- (Airport_code, Name, City, State); This is technically correct but probably breaks the code
+
+LOAD DATA LOCAL INFILE 'AIRPLANE_TYPE.csv'
+INTO TABLE airplane_types
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"' 
+LINES TERMINATED BY '\n' 
+IGNORE 1 ROWS;
+
+LOAD DATA LOCAL INFILE 'AIRPLANE.csv' 
+INTO TABLE airplanes 
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"' 
+LINES TERMINATED BY '\n' 
+IGNORE 1 ROWS;
+
+LOAD DATA LOCAL INFILE 'FLIGHT.csv'
+INTO TABLE flights
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"' 
+LINES TERMINATED BY '\n' 
+IGNORE 1 ROWS;
+
+LOAD DATA LOCAL INFILE 'FLIGHT_LEG.csv'
+INTO TABLE flight_legs
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"' 
+LINES TERMINATED BY '\n' 
+IGNORE 1 ROWS;
+
+LOAD DATA LOCAL INFILE 'LEG_INSTANCE.csv' 
+INTO TABLE leg_instances
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS 
+(number, leg_no, date, no_of_avail_seats, airplane_id, @dummy1, @dummy2);
+
+LOAD DATA LOCAL INFILE 'SEAT.csv' 
+INTO TABLE seats 
+FIELDS TERMINATED BY ',' 
+LINES TERMINATED BY '\n' 
+IGNORE 1 ROWS 
+(airplane_id, seat_no, code);
+
+LOAD DATA LOCAL INFILE 'FARE.csv'
+INTO TABLE fares
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"' 
+LINES TERMINATED BY '\n' 
+IGNORE 1 ROWS;
