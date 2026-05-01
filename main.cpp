@@ -5,6 +5,7 @@
  * Features:
  *   trip("SRC", "DST")  - Find direct and 1-stop itineraries between airports
  *   flight("XXXXX")     - Look up flight details by flight number
+ *   available("NUMBER", LEG, "YYYY-MM-DD") - Check seat availability
  *
  * Build: make
  * Run:   ./flightdb
@@ -12,6 +13,7 @@
 
 #include "db.h"
 #include "queries.h"
+#include "availability.h"
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -96,6 +98,10 @@ R"(
               << "  — find direct & 1-stop itineraries\n";
     std::cout << col::green << "    flight(\"NUMBER\")" << col::reset
               << "    — look up flight details\n";
+    std::cout << col::green << "    available(\"NUMBER\", LEG, \"YYYY-MM-DD\")" << col::reset
+              << " — show seat availability\n";
+    std::cout << col::green << "    available(\"NUMBER\", LEG, \"YYYY-MM-DD\", SEAT)" << col::reset
+              << " — check one seat\n";
     std::cout << col::yellow << "    help" << col::reset
               << "                  — show this message\n";
     std::cout << col::yellow << "    quit" << col::reset << " / "
@@ -113,6 +119,14 @@ static void printHelp() {
     std::cout << col::green << "  flight(\"NUMBER\")\n" << col::reset;
     std::cout << "    Show details for a flight by its number.\n";
     std::cout << "      e.g.  flight(\"AA3478\")\n\n";
+
+    std::cout << col::green << "  available(\"NUMBER\", LEG, \"YYYY-MM-DD\")\n" << col::reset;
+    std::cout << "    Show seat availability for one flight leg instance.\n";
+    std::cout << "      e.g.  available(\"1001\", 1, \"2025-10-01\")\n\n";
+
+    std::cout << col::green << "  available(\"NUMBER\", LEG, \"YYYY-MM-DD\", SEAT)\n" << col::reset;
+    std::cout << "    Check one exact seat for that flight leg instance.\n";
+    std::cout << "      e.g.  available(\"1001\", 1, \"2025-10-01\", 12)\n\n";
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -174,6 +188,45 @@ int main(int argc, char* argv[]) {
                 continue;
             }
             searchFlight(db, cmd.args[0]);
+
+        } else if (cmd.func == "available" || cmd.func == "availability") {
+            if (cmd.args.size() != 3 && cmd.args.size() != 4) {
+                std::cout << col::red
+                          << "  Usage: available(\"NUMBER\", LEG, \"YYYY-MM-DD\")\n"
+                          << "     or: available(\"NUMBER\", LEG, \"YYYY-MM-DD\", SEAT)\n"
+                          << col::reset;
+                continue;
+            }
+
+            std::string number = trim(cmd.args[0]);
+            std::string date = trim(cmd.args[2]);
+            int leg_no = 0;
+            int seat_no = 0;
+
+            try {
+                leg_no = std::stoi(trim(cmd.args[1]));
+                if (cmd.args.size() == 4) {
+                    seat_no = std::stoi(trim(cmd.args[3]));
+                }
+            } catch (const std::exception&) {
+                std::cout << col::red
+                          << "  LEG and SEAT must be numbers.\n"
+                          << "  Example: available(\"1001\", 1, \"2025-10-01\")\n"
+                          << col::reset;
+                continue;
+            }
+
+            try {
+                if (cmd.args.size() == 3) {
+                    available(db, number, leg_no, date);
+                } else {
+                    available(db, number, leg_no, date, seat_no);
+                }
+            } catch (const std::exception& e) {
+                std::cout << col::red
+                          << "  Availability error: " << e.what() << "\n"
+                          << col::reset;
+            }
 
         } else {
             std::cout << col::red << "  Unknown function '" << cmd.func
