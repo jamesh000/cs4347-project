@@ -67,18 +67,15 @@ CREATE TABLE leg_instances (
        FOREIGN KEY (airplane_id) REFERENCES airplanes(airplane_id)
 );
 
--- NOTE: THIS WILL HAVE TO BE UPDATED --
 CREATE TABLE seats (
-       airplane_id VARCHAR(15), -- added for csv
-       seat_no VARCHAR(3), -- updated to VARCHAR(3) -- 
-       code VARCHAR(15),  -- added code for class column.
-       date DATE,
-       leg_no INT,
        number VARCHAR(6),
-       customer_name VARCHAR(50), -- changed to optional i.e. not NOT NULL
+       leg_no INT,
+       date DATE,
+       seat_no INT,
+       customer_name VARCHAR(50) NOT NULL,
        cphone VARCHAR(10),
 
-       PRIMARY KEY (airplane_id, seat_no),  -- updated pk, will not the same for mile3
+       PRIMARY KEY (seat_no, date, leg_no, number),
 
        FOREIGN KEY (date, leg_no, number) REFERENCES leg_instances(date, leg_no, number),
        FOREIGN KEY (airplane_id) REFERENCES airplanes(airplane_id)
