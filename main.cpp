@@ -98,10 +98,14 @@ R"(
               << "  — find direct & 1-stop itineraries\n";
     std::cout << col::green << "    flight(\"NUMBER\")" << col::reset
               << "    — look up flight details\n";
+    std::cout << col::green << "    util(\"START_TIME\", \"END_TIME\")" << col::reset
+              << "    — show all plane utilization\n";
     std::cout << col::green << "    available(\"NUMBER\", LEG, \"YYYY-MM-DD\")" << col::reset
               << " — show seat availability\n";
     std::cout << col::green << "    available(\"NUMBER\", LEG, \"YYYY-MM-DD\", SEAT)" << col::reset
               << " — check one seat\n";
+    std::cout << col::green << "    itinerary(\"NAME\")" << col::reset
+              << "    — look up all flights for a customer\n";
     std::cout << col::yellow << "    help" << col::reset
               << "                  — show this message\n";
     std::cout << col::yellow << "    quit" << col::reset << " / "
@@ -120,13 +124,21 @@ static void printHelp() {
     std::cout << "    Show details for a flight by its number.\n";
     std::cout << "      e.g.  flight(\"AA3478\")\n\n";
 
+    std::cout << col::green << "  util(\"START_TIME\", \"END_TIME\")\n" << col::reset;
+    std::cout << "    Show plane utilization \n";
+    std::cout << "      e.g. util(\"2025-10-01\", \"2025-10-15\")\n\n";  
+
     std::cout << col::green << "  available(\"NUMBER\", LEG, \"YYYY-MM-DD\")\n" << col::reset;
     std::cout << "    Show seat availability for one flight leg instance.\n";
     std::cout << "      e.g.  available(\"1001\", 1, \"2025-10-01\")\n\n";
-
+    
     std::cout << col::green << "  available(\"NUMBER\", LEG, \"YYYY-MM-DD\", SEAT)\n" << col::reset;
     std::cout << "    Check one exact seat for that flight leg instance.\n";
     std::cout << "      e.g.  available(\"1001\", 1, \"2025-10-01\", 12)\n\n";
+
+    std::cout << col::green << "  itinerary(\"name\")\n" << col::reset;
+    std::cout << "    Show passenger itinerary\n";
+    std::cout << "      e.g. itinerary(\"Bob\")\n\n";
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -228,6 +240,20 @@ int main(int argc, char* argv[]) {
                           << col::reset;
             }
 
+        } else if (cmd.func == "itinerary") {
+            if (cmd.args.size() != 1) {
+                std::cout << col::red << "  Usage: itinerary(\"NAME\")\n" << col::reset;
+                continue;
+            }
+
+            itinerary(db, cmd.args[0]);
+        } else if (cmd.func == "util") {
+            if (cmd.args.size() != 2) {
+                std::cout << col::red << "  Usage: util\n" << col::reset;
+                continue;
+            }
+
+            util(db, cmd.args[0], cmd.args[1]);
         } else {
             std::cout << col::red << "  Unknown function '" << cmd.func
                       << "'. Type 'help' for usage.\n" << col::reset;

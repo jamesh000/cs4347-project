@@ -380,3 +380,95 @@ void searchTrip(DB& db, const std::string& srcInput, const std::string& dstInput
 
     std::cout << "\n";
 }
+
+// Itinerary check
+void itinerary(DB &db, const std::string& name) {
+    std::string userName = db.escape(name);
+
+    auto rows =
+        db.query("SELECT s.customer_name, s.number, s.date, s.leg_no, "
+                 "fl.dep_airport_code, fl.arr_airport_code, "
+                 "fl.scheduled_dep_time, fl.scheduled_arr_time, s.seat_no "
+                 "FROM seats s "
+                 "JOIN leg_instances li "
+                 "ON li.number = s.number "
+                 "AND li.leg_no = s.leg_no "
+                 "AND li.date = s.date "
+                 "JOIN flight_legs fl "
+                 "ON fl.number = li.number "
+                 "AND fl.leg_no = li.leg_no "
+                 "WHERE UPPER(s.customer_name) = UPPER('" +
+                 userName +
+                 "') "
+                 "ORDER BY s.number");
+
+    
+    if (!rows.empty()) {
+        std::cout << "\n" << C::B << "  RESERVATIONS\n" << C::R;
+
+        std::cout << "  " << C::D
+                  << pad("Name", 20)
+                  << pad("Flight", 10)
+                  << pad("Date", 12)
+                  << pad("Leg", 5)
+                  << pad("From", 8)
+                  << pad("To", 8)
+                  << pad("Dep Time", 11)
+                  << pad("Arr Time", 11)
+                  << "Seat\n"
+                  << C::R;
+
+        printDivider('-', 100);
+
+        for (auto& row : rows) {
+            std::cout << "  "
+                      << pad(row["customer_name"], 20)
+                      << pad(row["number"], 10)
+                      << pad(row["date"], 12)
+                      << pad(row["leg_no"], 5)
+                      << pad(row["dep_airport_code"], 8)
+                      << pad(row["arr_airport_code"], 8)
+                      << pad(row["scheduled_dep_time"], 11)
+                      << pad(row["scheduled_arr_time"], 11)
+                      << row["seat_no"]
+                      << "\n";
+        }
+    }
+}
+
+void util(DB &db, const std::string& start, const std::string& end) {
+    std::string startDate = db.escape(start);
+    std::string endDate = db.escape(end);
+
+    auto rows = db.query(
+        "SELECT a.airplane_id, a.typename, COUNT(li.number) AS total_flights "
+        "FROM airplanes a "
+        "LEFT JOIN leg_instances li "
+        "ON a.airplane_id = li.airplane_id "
+        "AND li.date BETWEEN '" +
+        startDate + "' AND '" + endDate +
+        "' "
+        "GROUP BY "
+        "a.airplane_id, "
+        "a.typename "
+        "ORDER BY a.airplane_id;");
+
+    if (!rows.empty()) {
+        std::cout << "\n" << C::B << "  AIRCRAFT UTILIZATION REPORT\n" << C::R;
+        
+        std::cout << "  " << C::D
+                  << pad("Aircraft", 18)
+                  << pad("Type", 20)
+                  << "Flights\n" << C::R;
+
+        printDivider('-', 55);
+
+        for (auto& p : rows) {
+            std::cout << "  "
+                      << pad(p["airplane_id"], 18)
+                      << pad(p["typename"], 20)
+                      << p["total_flights"]
+                      << "\n";
+        }
+    }
+}
