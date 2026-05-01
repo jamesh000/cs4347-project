@@ -77,8 +77,7 @@ CREATE TABLE seats (
 
        PRIMARY KEY (seat_no, date, leg_no, number),
 
-       FOREIGN KEY (date, leg_no, number) REFERENCES leg_instances(date, leg_no, number),
-       FOREIGN KEY (airplane_id) REFERENCES airplanes(airplane_id)
+       FOREIGN KEY (date, leg_no, number) REFERENCES leg_instances(date, leg_no, number)
 );
 
 
@@ -130,8 +129,7 @@ LOAD DATA LOCAL INFILE 'SEAT.csv'
 INTO TABLE seats 
 FIELDS TERMINATED BY ',' 
 LINES TERMINATED BY '\n' 
-IGNORE 1 ROWS 
-(airplane_id, seat_no, code);
+IGNORE 1 ROWS;
 
 LOAD DATA LOCAL INFILE 'FARE.csv'
 INTO TABLE fares
