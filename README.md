@@ -24,6 +24,8 @@ MUST SET YOUR DB_PORT, USER, NAME AND PASS FOR THIS TO WORK.
 
 ## Build
 
+Libmysqlclient, GLFW and OpenGL are required. Imgui should be downloaded from https://github.com/ocornut/imgui and placed in the source directory.
+
 ```bash
 make
 ```
