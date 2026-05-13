@@ -718,9 +718,9 @@ void itinerary(DB &db, const std::string& name) {
     }
 }
 
-void util(DB &db, const std::string& start, const std::string& end) {
+void util(DB& db, const std::string& start, const std::string& end) {
     std::string startDate = db.escape(start);
-    std::string endDate = db.escape(end);
+    std::string endDate   = db.escape(end);
 
     auto rows = db.query(
         "SELECT a.airplane_id, a.typename, COUNT(li.number) AS total_flights "
@@ -735,22 +735,57 @@ void util(DB &db, const std::string& start, const std::string& end) {
         "a.typename "
         "ORDER BY a.airplane_id;");
 
-    if (!rows.empty()) {
-        std::cout << "\n" << C::B << "  AIRCRAFT UTILIZATION REPORT\n" << C::R;
-        
-        std::cout << "  " << C::D
-                  << pad("Aircraft", 18)
-                  << pad("Type", 20)
-                  << "Flights\n" << C::R;
+    if (rows.empty()) {
+        ImGui::TextColored(
+            ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+            "No utilization data found for the selected range."
+        );
+        return;
+    }
 
-        printDivider('-', 55);
+    // ── Report Header ────────────────────────────────────────────────────────
+    ImGui::SeparatorText("AIRCRAFT UTILIZATION REPORT");
+
+    ImGui::Text("Start Date:");
+    ImGui::SameLine(150);
+    ImGui::TextUnformatted(start.c_str());
+
+    ImGui::Text("End Date:");
+    ImGui::SameLine(150);
+    ImGui::TextUnformatted(end.c_str());
+
+    ImGui::Spacing();
+
+    // ── Utilization Table ────────────────────────────────────────────────────
+    if (ImGui::BeginTable(
+            "AircraftUtilizationTable",
+            3,
+            ImGuiTableFlags_Borders |
+            ImGuiTableFlags_RowBg |
+            ImGuiTableFlags_Resizable |
+            ImGuiTableFlags_SizingStretchProp)) {
+
+        ImGui::TableSetupColumn("Aircraft");
+        ImGui::TableSetupColumn("Type");
+        ImGui::TableSetupColumn("Flights");
+        ImGui::TableHeadersRow();
 
         for (auto& p : rows) {
-            std::cout << "  "
-                      << pad(p["airplane_id"], 18)
-                      << pad(p["typename"], 20)
-                      << p["total_flights"]
-                      << "\n";
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(p["airplane_id"].c_str());
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(p["typename"].c_str());
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextUnformatted(p["total_flights"].c_str());
         }
+
+        ImGui::EndTable();
     }
+
+    ImGui::Spacing();
 }
+
