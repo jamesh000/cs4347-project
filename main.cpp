@@ -135,6 +135,9 @@ int main(int, char **) {
     bool show_trip_window = false;
     std::string tripSource, tripDest;
 
+    bool show_flight_window = false;
+    std::string flightSearchNo;
+
     while (!glfwWindowShouldClose(window))
     {
         // Poll and handle events (inputs, window resize, etc.)
@@ -187,10 +190,16 @@ int main(int, char **) {
             ImGui::InputText("Source", &tripSource);
             ImGui::InputText("Destination", &tripDest);
 
-            if (ImGui::Button("Search")) {
+            if (ImGui::Button("Search for trips")) {
                 show_trip_window = true;
             }
 
+            ImGui::Text("Enter a flight number to see details");
+            ImGui::InputText("Flight No.", &flightSearchNo);
+            if (ImGui::Button("Search for flights")) {
+                show_flight_window = true;
+            }
+            
             ImGui::End();
         }
 
@@ -199,6 +208,14 @@ int main(int, char **) {
 
             searchTrip(db, tripSource, tripDest);
 
+            ImGui::End();
+        }
+
+        if (show_flight_window) {
+            ImGui::Begin("Flight");
+
+            searchFlight(db, flightSearchNo);
+            
             ImGui::End();
         }          
 

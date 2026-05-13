@@ -84,14 +84,29 @@ void searchFlight(DB& db, const std::string& number) {
         "WHERE UPPER(f.number) = UPPER('" + safe + "')");
 
     if (rows.empty()) {
-        std::cout << C::RD << "  No flight found with number '" << number << "'\n" << C::R;
+        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                           "No flight found with number '%s'",
+                           number.c_str());
         return;
     }
 
-    printHeader("FLIGHT " + rows[0]["number"]);
-    std::cout << C::B << "  Airline  : " << C::R << rows[0]["airline"]  << "\n";
-    std::cout << C::B << "  Number   : " << C::R << rows[0]["number"]   << "\n";
-    std::cout << C::B << "  Weekdays : " << C::R << rows[0]["weekdays"] << "\n";
+    auto& flight = rows[0];
+
+    // ── Flight Header ────────────────────────────────────────────────────────
+    std::string title = "FLIGHT " + flight["number"];
+    ImGui::SeparatorText(title.c_str());
+
+    ImGui::Text("Airline:");
+    ImGui::SameLine(150);
+    ImGui::TextUnformatted(flight["airline"].c_str());
+
+    ImGui::Text("Number:");
+    ImGui::SameLine(150);
+    ImGui::TextUnformatted(flight["number"].c_str());
+
+    ImGui::Text("Weekdays:");
+    ImGui::SameLine(150);
+    ImGui::TextUnformatted(flight["weekdays"].c_str());
 
     // ── Legs ─────────────────────────────────────────────────────────────────
     auto legs = db.query(
@@ -107,23 +122,52 @@ void searchFlight(DB& db, const std::string& number) {
         "ORDER BY fl.leg_no");
 
     if (!legs.empty()) {
-        std::cout << "\n" << C::B << "  LEGS\n" << C::R;
-        std::cout << "  " << C::D
-                  << pad("Leg", 5) << pad("Departure", 26)
-                  << pad("Arrival", 26) << "Dep Time   Arr Time\n" << C::R;
-        printDivider('-', 70);
-        for (auto& leg : legs) {
-            std::cout << "  "
-                      << pad(leg["leg_no"], 5)
-                      << pad(leg["dep_code"] + " " + leg["dep_city"], 26)
-                      << pad(leg["arr_code"] + " " + leg["arr_city"], 26)
-                      << pad(leg["scheduled_dep_time"], 11)
-                      << leg["scheduled_arr_time"]
-                      << "\n";
+        ImGui::Spacing();
+        ImGui::SeparatorText("LEGS");
+
+        if (ImGui::BeginTable("LegsTable", 5,
+                              ImGuiTableFlags_Borders |
+                              ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_Resizable |
+                              ImGuiTableFlags_SizingStretchProp)) {
+
+            ImGui::TableSetupColumn("Leg");
+            ImGui::TableSetupColumn("Departure");
+            ImGui::TableSetupColumn("Arrival");
+            ImGui::TableSetupColumn("Dep Time");
+            ImGui::TableSetupColumn("Arr Time");
+            ImGui::TableHeadersRow();
+
+            for (auto& leg : legs) {
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(leg["leg_no"].c_str());
+
+                ImGui::TableSetColumnIndex(1);
+                std::string dep =
+                    leg["dep_code"] + " " + leg["dep_city"];
+                ImGui::TextUnformatted(dep.c_str());
+
+                ImGui::TableSetColumnIndex(2);
+                std::string arr =
+                    leg["arr_code"] + " " + leg["arr_city"];
+                ImGui::TextUnformatted(arr.c_str());
+
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextUnformatted(
+                    leg["scheduled_dep_time"].c_str());
+
+                ImGui::TableSetColumnIndex(4);
+                ImGui::TextUnformatted(
+                    leg["scheduled_arr_time"].c_str());
+            }
+
+            ImGui::EndTable();
         }
     }
 
-    // ── Fares ─────────────────────────────────────────────────────────────────
+    // ── Fares ────────────────────────────────────────────────────────────────
     auto fares = db.query(
         "SELECT code, amount, restriction "
         "FROM fares "
@@ -131,20 +175,39 @@ void searchFlight(DB& db, const std::string& number) {
         "ORDER BY amount");
 
     if (!fares.empty()) {
-        std::cout << "\n" << C::B << "  FARES\n" << C::R;
-        std::cout << "  " << C::D
-                  << pad("Code", 8) << pad("Amount ($)", 14) << "Restriction\n" << C::R;
-        printDivider('-', 50);
-        for (auto& fare : fares) {
-            std::cout << "  "
-                      << pad(fare["code"], 8)
-                      << pad(fare["amount"], 14)
-                      << fare["restriction"]
-                      << "\n";
+        ImGui::Spacing();
+        ImGui::SeparatorText("FARES");
+
+        if (ImGui::BeginTable("FaresTable", 3,
+                              ImGuiTableFlags_Borders |
+                              ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_Resizable |
+                              ImGuiTableFlags_SizingStretchProp)) {
+
+            ImGui::TableSetupColumn("Code");
+            ImGui::TableSetupColumn("Amount ($)");
+            ImGui::TableSetupColumn("Restriction");
+            ImGui::TableHeadersRow();
+
+            for (auto& fare : fares) {
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(fare["code"].c_str());
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("$%s", fare["amount"].c_str());
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextUnformatted(
+                    fare["restriction"].c_str());
+            }
+
+            ImGui::EndTable();
         }
     }
 
-    std::cout << "\n";
+    ImGui::Spacing();
 }
 
 // ─── trip() ───────────────────────────────────────────────────────────────────
