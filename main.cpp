@@ -161,8 +161,13 @@ int main(int, char **) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        {          
+        {
             ImGui::Begin("Input Query");
+
+            ImGui::Text("All queries will spawn an auto updating window, except for itinerary search. You must click the button to update the itinerary search.");
+
+            ImGui::Spacing();
+            ImGui::Separator();
 
             ImGui::Text("Enter a trip source and destination to find all flights");
             ImGui::InputText("Source", &tripSource);
