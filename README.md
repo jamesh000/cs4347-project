@@ -1,4 +1,4 @@
-# FlightDB — Milestone 2
+# FlightDB — Milestone 3
 
 MySQL + C++ Command-Line Application
 
@@ -59,7 +59,7 @@ export DB_PASS=secret
 
 ---
 
-## Usage
+## Usage (Via TUI)
 
 ```
 prompt> trip("DFW", "SFO")          # by IATA code
@@ -71,6 +71,13 @@ prompt> flight("AA3478")            # by flight number
 prompt> help                        # show commands
 prompt> quit                        # exit
 ```
+
+---
+
+## Usage (Via GUI)
+
+-- Flight Search --
+Input the three letter IATA airport codes of your intended Source & Destination into their respective fields, and click on the "Search for trips" button directly below the Destination field.
 
 ---
 
@@ -104,9 +111,8 @@ FlightDB/
 
 ---
 
-## Extending for Milestone 3+
+## Justification & Description of Design Patterns
 
-- **Add `book()`** — insert into `seats`, decrement `leg_instances.no_of_avail_seats`
-- **Add `cancel()`** — delete from `seats`, increment available seats
-- **Add date filtering** — join `leg_instances` on a user-supplied date
-- **GUI frontend** — `main.cpp` is isolated from the query layer; swap in a web server or Qt UI without touching `queries.h`
+The system architecture for this Database Management System was designed around the idea that multiple uncomplicated, largely independent systems would be easier to troubleshoot and revise than one monolithic structure. To this end, the Database Interface, Business Logic, and UI were split. The Database Interface handles connection management and query execution using an RAII pattern to ensure the MySQL connection is safely closed. The Logic Layer handles the translation of user requests into SQL joins and directly generates the GUI-compatible output by interacting with the imgui API. The GUI layer handles the rendering loop and window state, which was built using GLFW and OpenGL 3 due to particular team members' prior experience; this was also the justification for the use of C++ as the primary language. 
+
+The program's menus were designed primarily around the ideas of modularity and readability. The user is able to easily reorganize their workspace by dragging components around to suit their primary use case. As this modularity would likely make the program more confusing, we decided to compensate by making everything else as easily readable as possible. We implemented color coding to help important data stand out and made sure that the spacing provided enough visual breathing room so that the user would be able to determine exactly where one block of data began and another ended.

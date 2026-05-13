@@ -11,8 +11,8 @@
 void available(DB& db, const std::string& number, int leg_no, const std::string& date);
 
 // Checks one specific seat number for one flight leg instance.
-void available(DB& db, const std::string& number, int leg_no, const std::string& date, int seat_no);
+void available(DB& db, const std::string& number, const std::string leg_no, const std::string& date, int seat_no);
 
 // Longer aliases, in case your team prefers descriptive function names.
-void checkAvailability(DB& db, const std::string& number, int leg_no, const std::string& date);
+void checkAvailability(DB& db, const std::string& number, const std::string leg_no, const std::string& date);
 void checkSeatAvailability(DB& db, const std::string& number, int leg_no, const std::string& date, int seat_no);

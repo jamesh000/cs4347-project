@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <sstream>
 #include <vector>
+#include "imgui.h"
 
 namespace availability_colors {
     const std::string reset  = "\033[0m";
@@ -34,16 +35,13 @@ static std::string seatList(const std::vector<Row>& rows) {
     return out.str();
 }
 
-void checkAvailability(DB& db, const std::string& number, int leg_no, const std::string& date) {
-    using namespace availability_colors;
-
+void checkAvailability(DB& db, const std::string& number,
+                       const std::string leg_no,
+                       const std::string& date)
+{
     const std::string flightNumber = db.escape(number);
     const std::string flightDate   = db.escape(date);
 
-    // Seats are now tied to a specific LEG_INSTANCE, whose key is:
-    //   (date, leg_no, number)
-    // The seats table references that same leg instance and adds seat_no:
-    //   (seat_no, date, leg_no, number)
     std::string instanceSQL =
         "SELECT li.number, li.leg_no, li.date, li.no_of_avail_seats, "
         "       li.airplane_id, a.total_no_of_seats, a.typename, "
@@ -53,14 +51,15 @@ void checkAvailability(DB& db, const std::string& number, int leg_no, const std:
         "JOIN flight_legs fl ON fl.number = li.number AND fl.leg_no = li.leg_no "
         "LEFT JOIN airplanes a ON a.airplane_id = li.airplane_id "
         "WHERE UPPER(li.number) = UPPER('" + flightNumber + "') "
-        "  AND li.leg_no = " + std::to_string(leg_no) + " "
+        "  AND li.leg_no = " + leg_no + " "
         "  AND li.date = '" + flightDate + "'";
 
     auto instance = db.query(instanceSQL);
 
     if (instance.empty()) {
-        std::cout << red << "  No leg instance found for flight " << number
-                  << ", leg " << leg_no << ", date " << date << ".\n" << reset;
+        ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, 1.0f),
+            "No leg instance found for flight %s, leg %s, date %s.",
+            number.c_str(), leg_no.c_str(), date.c_str());
         return;
     }
 
@@ -70,48 +69,96 @@ void checkAvailability(DB& db, const std::string& number, int leg_no, const std:
         "SELECT seat_no, customer_name, cphone "
         "FROM seats "
         "WHERE UPPER(number) = UPPER('" + flightNumber + "') "
-        "  AND leg_no = " + std::to_string(leg_no) + " "
+        "  AND leg_no = " + leg_no + " "
         "  AND date = '" + flightDate + "' "
         "ORDER BY seat_no";
 
     auto bookedSeats = db.query(seatsSQL);
 
-    std::cout << "\n" << cyan << bold << "  AVAILABILITY\n" << reset;
-    printLine('=');
-    std::cout << "  Flight: " << bold << r.at("number") << reset
-              << " | Leg: " << r.at("leg_no")
-              << " | Date: " << r.at("date") << "\n";
-    std::cout << "  Route:  " << r.at("dep_airport_code") << " -> " << r.at("arr_airport_code")
-              << " | Dep: " << r.at("scheduled_dep_time")
-              << " | Arr: " << r.at("scheduled_arr_time") << "\n";
-    std::cout << "  Plane:  " << r.at("airplane_id")
-              << " | Type: " << r.at("typename")
-              << " | Total seats: " << r.at("total_no_of_seats") << "\n";
+    // ============================================================
+    // Header
+    // ============================================================
 
-    std::cout << green << "  Available seats: " << r.at("no_of_avail_seats") << reset << "\n";
-    std::cout << yellow << "  Booked seat records: " << bookedSeats.size() << reset << "\n";
+    ImGui::SeparatorText("Availability");
+
+    ImGui::Text("Flight: %s", r.at("number").c_str());
+    ImGui::SameLine();
+    ImGui::Text("| Leg: %s", r.at("leg_no").c_str());
+    ImGui::SameLine();
+    ImGui::Text("| Date: %s", r.at("date").c_str());
+
+    ImGui::Text("Route: %s -> %s",
+        r.at("dep_airport_code").c_str(),
+        r.at("arr_airport_code").c_str());
+
+    ImGui::Text("Departure: %s",
+        r.at("scheduled_dep_time").c_str());
+
+    ImGui::Text("Arrival: %s",
+        r.at("scheduled_arr_time").c_str());
+
+    ImGui::Text("Plane: %s",
+        r.at("airplane_id").c_str());
+
+    ImGui::Text("Type: %s",
+        r.at("typename").c_str());
+
+    ImGui::Text("Total Seats: %s",
+        r.at("total_no_of_seats").c_str());
+
+    ImGui::TextColored(
+        ImVec4(0.2f, 1.0f, 0.2f, 1.0f),
+        "Available Seats: %s",
+        r.at("no_of_avail_seats").c_str()
+    );
+
+    ImGui::TextColored(
+        ImVec4(1.0f, 1.0f, 0.2f, 1.0f),
+        "Booked Seat Records: %d",
+        static_cast<int>(bookedSeats.size())
+    );
+
+    ImGui::Spacing();
+
+    // ============================================================
+    // Booked Seats Table
+    // ============================================================
 
     if (bookedSeats.empty()) {
-        std::cout << dim << "  No booked seat rows found for this leg instance.\n" << reset;
-    } else {
-        std::cout << "\n" << bold << "  Booked seats\n" << reset;
-        printLine('-');
-        std::cout << "  " << std::left
-                  << std::setw(10) << "Seat"
-                  << std::setw(24) << "Customer"
-                  << "Phone\n";
-        printLine('-');
-
-        for (const Row& seat : bookedSeats) {
-            std::cout << "  " << std::left
-                      << std::setw(10) << seat.at("seat_no")
-                      << std::setw(24) << seat.at("customer_name")
-                      << seat.at("cphone") << "\n";
-        }
+        ImGui::TextDisabled("No booked seat rows found for this leg instance.");
+        return;
     }
 
-    std::cout << "\n";
+    ImGui::SeparatorText("Booked Seats");
+
+    if (ImGui::BeginTable("BookedSeatsTable", 3,
+        ImGuiTableFlags_Borders |
+        ImGuiTableFlags_RowBg |
+        ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_SizingStretchProp))
+    {
+        ImGui::TableSetupColumn("Seat");
+        ImGui::TableSetupColumn("Customer");
+        ImGui::TableSetupColumn("Phone");
+        ImGui::TableHeadersRow();
+
+        for (const Row& seat : bookedSeats) {
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%s", seat.at("seat_no").c_str());
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%s", seat.at("customer_name").c_str());
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%s", seat.at("cphone").c_str());
+        }
+
+        ImGui::EndTable();
+    }
 }
+
 
 void checkSeatAvailability(DB& db, const std::string& number, int leg_no, const std::string& date, int seat_no) {
     using namespace availability_colors;
@@ -163,7 +210,7 @@ void checkSeatAvailability(DB& db, const std::string& number, int leg_no, const 
     std::cout << "\n";
 }
 
-void available(DB& db, const std::string& number, int leg_no, const std::string& date) {
+void available(DB& db, const std::string& number, const std::string leg_no, const std::string& date) {
     checkAvailability(db, number, leg_no, date);
 }
 

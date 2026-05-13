@@ -129,7 +129,6 @@ int main(int, char **) {
     io.Fonts->AddFontFromFileTTF("./imgui/misc/fonts/Cousine-Regular.ttf");
 
     // Our state
-    bool show_demo_window = true;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     bool show_trip_window = false;
@@ -140,6 +139,13 @@ int main(int, char **) {
 
     bool show_util_window = false;
     std::string utilStartDate, utilEndDate;
+
+    bool show_availability_window = false;
+    std::string seatFlightNo, seatLegNo, seatFlightDate;
+
+    bool show_itinerary_window = false;
+    std::string passengerName;
+    std::vector<std::map<std::string, std::string>> rows;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -166,18 +172,46 @@ int main(int, char **) {
                 show_trip_window = true;
             }
 
+            ImGui::Spacing();
+            ImGui::Separator();
+
             ImGui::Text("Enter a flight number to see details");
             ImGui::InputText("Flight No.", &flightSearchNo);
             if (ImGui::Button("Search for flights")) {
                 show_flight_window = true;
             }
 
-            ImGui::Text("Enter a date range to see aircraft utilization over that period");
-            ImGui::InputText("Start Date", &utilStartDate);
-            ImGui::InputText("End Date", &utilEndDate);
+            ImGui::Spacing();
+            ImGui::Separator();            
+
+            ImGui::Text("Enter a date range to see aircraft utilization over that period (year-month-day)");
+            ImGui::InputText("Start Date (xxxx-xx-xx)", &utilStartDate);
+            ImGui::InputText("End Date (xxxx-xx-xx)", &utilEndDate);
             if (ImGui::Button("See aircraft utilization")) {
                 show_util_window = true;
-            }            
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+
+            ImGui::Text("Enter a flight number and date (year-month-day) to check seat availability");
+            ImGui::InputText("Flight", &seatFlightNo);
+            ImGui::InputText("Seat Leg No.", &seatLegNo);
+            ImGui::InputText("Flight Date", &seatFlightDate);
+            if (ImGui::Button("Check seat availability")) {
+                show_availability_window = true;
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+
+            ImGui::Text("Enter your name to see booked flights");
+            ImGui::InputText("Passenger Name", &passengerName);
+            if (ImGui::Button("Show itinerary")) {
+                rows = itinerary(db, passengerName);
+
+                show_itinerary_window = true;
+            }                    
             
             ImGui::End();
         }
@@ -206,6 +240,81 @@ int main(int, char **) {
             ImGui::End();
         }
 
+        if (show_availability_window) {
+            ImGui::Begin("Seat Availability", &show_availability_window);
+
+            checkAvailability(db, seatFlightNo, seatLegNo, seatFlightDate);
+
+            ImGui::End();
+        }
+
+        if (show_itinerary_window) {
+            ImGui::Begin("Itinerary Check", &show_itinerary_window);
+
+            if (rows.empty()) {
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                    "No itinerary for this customer."
+                    );
+            } else {
+
+                ImGui::TextUnformatted("RESERVATIONS");
+                ImGui::Separator();
+
+                if (ImGui::BeginTable("itinerary_table", 9,
+                                      ImGuiTableFlags_Borders |
+                                      ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_Resizable |
+                                      ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Name");
+                    ImGui::TableSetupColumn("Flight");
+                    ImGui::TableSetupColumn("Date");
+                    ImGui::TableSetupColumn("Leg");
+                    ImGui::TableSetupColumn("From");
+                    ImGui::TableSetupColumn("To");
+                    ImGui::TableSetupColumn("Dep Time");
+                    ImGui::TableSetupColumn("Arr Time");
+                    ImGui::TableSetupColumn("Seat");
+                    ImGui::TableHeadersRow();
+
+                    for (auto& row : rows) {
+                        ImGui::TableNextRow();
+
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::TextUnformatted(row["customer_name"].c_str());
+
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::TextUnformatted(row["number"].c_str());
+
+                        ImGui::TableSetColumnIndex(2);
+                        ImGui::TextUnformatted(row["date"].c_str());
+
+                        ImGui::TableSetColumnIndex(3);
+                        ImGui::TextUnformatted(row["leg_no"].c_str());
+
+                        ImGui::TableSetColumnIndex(4);
+                        ImGui::TextUnformatted(row["dep_airport_code"].c_str());
+
+                        ImGui::TableSetColumnIndex(5);
+                        ImGui::TextUnformatted(row["arr_airport_code"].c_str());
+
+                        ImGui::TableSetColumnIndex(6);
+                        ImGui::TextUnformatted(row["scheduled_dep_time"].c_str());
+
+                        ImGui::TableSetColumnIndex(7);
+                        ImGui::TextUnformatted(row["scheduled_arr_time"].c_str());
+
+                        ImGui::TableSetColumnIndex(8);
+                        ImGui::TextUnformatted(row["seat_no"].c_str());
+                    }
+
+                    ImGui::EndTable();
+                }                
+            }
+
+            ImGui::End();
+        }          
+
         // Rendering
         ImGui::Render();
         int display_w, display_h;
@@ -217,9 +326,6 @@ int main(int, char **) {
 
         glfwSwapBuffers(window);
     }
-#ifdef __EMSCRIPTEN__
-    EMSCRIPTEN_MAINLOOP_END;
-#endif
 
     // Cleanup
     ImGui_ImplOpenGL3_Shutdown();

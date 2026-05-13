@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <iomanip>
 #include "imgui.h"
+#include <map>
 
 namespace C {
     const std::string R  = "\033[0m";
@@ -664,7 +665,9 @@ void searchTrip(DB& db, const std::string& srcInput, const std::string& dstInput
 }
 
 // Itinerary check
-void itinerary(DB &db, const std::string& name) {
+#include <imgui.h>
+
+std::vector<std::map<std::string, std::string>> itinerary(DB &db, const std::string& name) {
     std::string userName = db.escape(name);
 
     auto rows =
@@ -684,39 +687,9 @@ void itinerary(DB &db, const std::string& name) {
                  "') "
                  "ORDER BY s.number");
 
-    
-    if (!rows.empty()) {
-        std::cout << "\n" << C::B << "  RESERVATIONS\n" << C::R;
-
-        std::cout << "  " << C::D
-                  << pad("Name", 20)
-                  << pad("Flight", 10)
-                  << pad("Date", 12)
-                  << pad("Leg", 5)
-                  << pad("From", 8)
-                  << pad("To", 8)
-                  << pad("Dep Time", 11)
-                  << pad("Arr Time", 11)
-                  << "Seat\n"
-                  << C::R;
-
-        printDivider('-', 100);
-
-        for (auto& row : rows) {
-            std::cout << "  "
-                      << pad(row["customer_name"], 20)
-                      << pad(row["number"], 10)
-                      << pad(row["date"], 12)
-                      << pad(row["leg_no"], 5)
-                      << pad(row["dep_airport_code"], 8)
-                      << pad(row["arr_airport_code"], 8)
-                      << pad(row["scheduled_dep_time"], 11)
-                      << pad(row["scheduled_arr_time"], 11)
-                      << row["seat_no"]
-                      << "\n";
-        }
-    }
+    return rows;
 }
+
 
 void util(DB& db, const std::string& start, const std::string& end) {
     std::string startDate = db.escape(start);
