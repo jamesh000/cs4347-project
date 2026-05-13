@@ -1,15 +1,23 @@
-/**
- * FlightDB - MySQL C++ Command Line Application
- * Milestone 2: Database Interaction Layer
- *
- * Features:
- *   trip("SRC", "DST")  - Find direct and 1-stop itineraries between airports
- *   flight("XXXXX")     - Look up flight details by flight number
- *   available("NUMBER", LEG, "YYYY-MM-DD") - Check seat availability
- *
- * Build: make
- * Run:   ./flightdb
- */
+// Dear ImGui: standalone example application for GLFW + OpenGL 3, using programmable pipeline
+// (GLFW is a cross-platform general purpose library for handling windows, inputs, OpenGL/Vulkan/Metal graphics context creation, etc.)
+
+// Learn about Dear ImGui:
+// - FAQ                  https://dearimgui.com/faq
+// - Getting Started      https://dearimgui.com/getting-started
+// - Documentation        https://dearimgui.com/docs (same as your local docs/ folder).
+// - Introduction, links and more at the top of imgui.cpp
+
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+#include "misc/cpp/imgui_stdlib.h"
+#include <stdio.h>
+#include <string>
+#define GL_SILENCE_DEPRECATION
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+#include <GLES2/gl2.h>
+#endif
+#include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
 #include "db.h"
 #include "queries.h"
@@ -21,129 +29,21 @@
 #include <algorithm>
 #include <cctype>
 
-// ─── ANSI colours ────────────────────────────────────────────────────────────
-namespace col {
-    const std::string reset  = "\033[0m";
-    const std::string bold   = "\033[1m";
-    const std::string dim    = "\033[2m";
-    const std::string cyan   = "\033[36m";
-    const std::string green  = "\033[32m";
-    const std::string yellow = "\033[33m";
-    const std::string red    = "\033[31m";
-    const std::string blue   = "\033[34m";
-    const std::string magenta= "\033[35m";
+// [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
+// To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
+// Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
+#if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
+#pragma comment(lib, "legacy_stdio_definitions")
+#endif
+
+static void glfw_error_callback(int error, const char* description)
+{
+    fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// Main code
+int main(int, char **) {
 
-static std::string trim(const std::string& s) {
-    size_t a = s.find_first_not_of(" \t\r\n\"'");
-    if (a == std::string::npos) return "";
-    size_t b = s.find_last_not_of(" \t\r\n\"'");
-    return s.substr(a, b - a + 1);
-}
-
-static std::string toUpper(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(), ::toupper);
-    return s;
-}
-
-// Rudimentary parser: extract function name and comma-separated args
-// Handles:  trip("DFW","SFO")  or  trip(DFW, SFO)  or  flight("AA3478")
-struct Command {
-    std::string func;
-    std::vector<std::string> args;
-    bool valid = false;
-};
-
-static Command parse(const std::string& line) {
-    Command cmd;
-    size_t paren = line.find('(');
-    if (paren == std::string::npos) return cmd;
-
-    cmd.func = trim(line.substr(0, paren));
-    std::transform(cmd.func.begin(), cmd.func.end(), cmd.func.begin(), ::tolower);
-
-    size_t close = line.rfind(')');
-    if (close == std::string::npos || close <= paren) return cmd;
-
-    std::string inner = line.substr(paren + 1, close - paren - 1);
-    std::stringstream ss(inner);
-    std::string tok;
-    while (std::getline(ss, tok, ',')) {
-        std::string arg = trim(tok);
-        if (!arg.empty()) cmd.args.push_back(arg);
-    }
-    cmd.valid = true;
-    return cmd;
-}
-
-// ─── Banner ───────────────────────────────────────────────────────────────────
-
-static void printBanner() {
-    std::cout << col::cyan << col::bold <<
-R"(
-  ███████╗██╗     ██╗ ██████╗ ██╗  ██╗████████╗██████╗ ██████╗
-  ██╔════╝██║     ██║██╔════╝ ██║  ██║╚══██╔══╝██╔══██╗██╔══██╗
-  █████╗  ██║     ██║██║  ███╗███████║   ██║   ██║  ██║██████╔╝
-  ██╔══╝  ██║     ██║██║   ██║██╔══██║   ██║   ██║  ██║██╔══██╗
-  ██║     ███████╗██║╚██████╔╝██║  ██║   ██║   ██████╔╝██████╔╝
-  ╚═╝     ╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═════╝ ╚═════╝
-)" << col::reset;
-
-    std::cout << col::dim << "  MySQL Flight Database — Milestone 2\n" << col::reset;
-    std::cout << col::dim << "  ─────────────────────────────────────────────────────────────\n" << col::reset;
-    std::cout << "  Commands:\n";
-    std::cout << col::green << "    trip(\"SRC\", \"DST\")" << col::reset
-              << "  — find direct & 1-stop itineraries\n";
-    std::cout << col::green << "    flight(\"NUMBER\")" << col::reset
-              << "    — look up flight details\n";
-    std::cout << col::green << "    util(\"START_TIME\", \"END_TIME\")" << col::reset
-              << "    — show all plane utilization\n";
-    std::cout << col::green << "    available(\"NUMBER\", LEG, \"YYYY-MM-DD\")" << col::reset
-              << " — show seat availability\n";
-    std::cout << col::green << "    available(\"NUMBER\", LEG, \"YYYY-MM-DD\", SEAT)" << col::reset
-              << " — check one seat\n";
-    std::cout << col::green << "    itinerary(\"NAME\")" << col::reset
-              << "    — look up all flights for a customer\n";
-    std::cout << col::yellow << "    help" << col::reset
-              << "                  — show this message\n";
-    std::cout << col::yellow << "    quit" << col::reset << " / "
-              << col::yellow << "exit" << col::reset
-              << "          — exit\n\n";
-}
-
-static void printHelp() {
-    std::cout << "\n" << col::bold << "COMMANDS\n" << col::reset;
-    std::cout << col::green << "  trip(\"SRC\", \"DST\")\n" << col::reset;
-    std::cout << "    Find all itineraries between two airports.\n";
-    std::cout << "    SRC / DST may be:\n";
-    std::cout << "      • A 3-letter IATA code  e.g.  trip(\"DFW\", \"SFO\")\n";
-    std::cout << "      • A city name           e.g.  trip(\"Dallas\", \"San Francisco\")\n\n";
-    std::cout << col::green << "  flight(\"NUMBER\")\n" << col::reset;
-    std::cout << "    Show details for a flight by its number.\n";
-    std::cout << "      e.g.  flight(\"AA3478\")\n\n";
-
-    std::cout << col::green << "  util(\"START_TIME\", \"END_TIME\")\n" << col::reset;
-    std::cout << "    Show plane utilization \n";
-    std::cout << "      e.g. util(\"2025-10-01\", \"2025-10-15\")\n\n";  
-
-    std::cout << col::green << "  available(\"NUMBER\", LEG, \"YYYY-MM-DD\")\n" << col::reset;
-    std::cout << "    Show seat availability for one flight leg instance.\n";
-    std::cout << "      e.g.  available(\"1001\", 1, \"2025-10-01\")\n\n";
-    
-    std::cout << col::green << "  available(\"NUMBER\", LEG, \"YYYY-MM-DD\", SEAT)\n" << col::reset;
-    std::cout << "    Check one exact seat for that flight leg instance.\n";
-    std::cout << "      e.g.  available(\"1001\", 1, \"2025-10-01\", 12)\n\n";
-
-    std::cout << col::green << "  itinerary(\"name\")\n" << col::reset;
-    std::cout << "    Show passenger itinerary\n";
-    std::cout << "      e.g. itinerary(\"Bob\")\n\n";
-}
-
-// ─── Entry point ──────────────────────────────────────────────────────────────
-
-int main(int argc, char* argv[]) {
     // --- Connection setup ---
     std::string host, user, password, database;
     int port = 3306;
@@ -157,109 +57,173 @@ int main(int argc, char* argv[]) {
 
     DB db;
     if (!db.connect(host, user, password, database, port)) {
-        std::cerr << col::red << "[error] Cannot connect to MySQL. "
-                  << "Set DB_HOST / DB_USER / DB_PASS / DB_NAME env vars.\n"
-                  << col::reset;
         return 1;
     }
-    std::cout << col::green << "[ok] Connected to MySQL (" << database << ")\n" << col::reset;
+    std::cout << "[ok] Connected to MySQL (" << database << ")" << std::endl;
 
-    printBanner();
+  
+    glfwSetErrorCallback(glfw_error_callback);
+    if (!glfwInit())
+        return 1;
 
-    // --- REPL ---
-    std::string line;
-    while (true) {
-        std::cout << col::cyan << col::bold << "prompt> " << col::reset;
-        if (!std::getline(std::cin, line)) break;   // EOF
+    // Decide GL+GLSL versions
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+    // GL ES 2.0 + GLSL 100 (WebGL 1.0)
+    const char* glsl_version = "#version 100";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#elif defined(IMGUI_IMPL_OPENGL_ES3)
+    // GL ES 3.0 + GLSL 300 es (WebGL 2.0)
+    const char* glsl_version = "#version 300 es";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#elif defined(__APPLE__)
+    // GL 3.2 + GLSL 150
+    const char* glsl_version = "#version 150";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
+#else
+    // GL 3.0 + GLSL 130
+    const char* glsl_version = "#version 130";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
+#endif
 
-        line = trim(line);
-        if (line.empty()) continue;
+    // Create window with graphics context
+    float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor()); // Valid on GLFW 3.3+ only
+    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "FlightDB GUI", nullptr, nullptr);
+    if (window == nullptr)
+        return 1;
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1); // Enable vsync
 
-        // Quit
-        if (line == "quit" || line == "exit" || line == "q") break;
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
-        // Help
-        if (line == "help" || line == "?") { printHelp(); continue; }
+    // Setup Dear ImGui style
+    //ImGui::StyleColorsDark();
+    ImGui::StyleColorsLight();
 
-        Command cmd = parse(line);
-        if (!cmd.valid) {
-            std::cout << col::red << "  Unrecognised command. Type 'help' for usage.\n" << col::reset;
+    // Setup scaling
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
+    style.FontScaleDpi = main_scale;        // Set initial font scale. (in docking branch: using io.ConfigDpiScaleFonts=true automatically overrides this for every window depending on the current monitor)
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+#ifdef __EMSCRIPTEN__
+    ImGui_ImplGlfw_InstallEmscriptenCallbacks(window, "#canvas");
+#endif
+    ImGui_ImplOpenGL3_Init(glsl_version);
+
+    io.Fonts->AddFontFromFileTTF("./imgui/misc/fonts/Cousine-Regular.ttf");
+
+    // Our state
+    bool show_demo_window = true;
+    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+    bool show_trip_window = false;
+    std::string tripSource, tripDest;
+
+    while (!glfwWindowShouldClose(window))
+    {
+        // Poll and handle events (inputs, window resize, etc.)
+        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
+        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
+        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
+        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+        glfwPollEvents();
+        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
+        {
+            ImGui_ImplGlfw_Sleep(10);
             continue;
         }
 
-        if (cmd.func == "trip") {
-            if (cmd.args.size() != 2) {
-                std::cout << col::red << "  Usage: trip(\"SRC\", \"DST\")\n" << col::reset;
-                continue;
-            }
-            searchTrip(db, cmd.args[0], cmd.args[1]);
+        // Start the Dear ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-        } else if (cmd.func == "flight") {
-            if (cmd.args.size() != 1) {
-                std::cout << col::red << "  Usage: flight(\"NUMBER\")\n" << col::reset;
-                continue;
-            }
-            searchFlight(db, cmd.args[0]);
+        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+        if (show_demo_window)
+            ImGui::ShowDemoWindow(&show_demo_window);
 
-        } else if (cmd.func == "available" || cmd.func == "availability") {
-            if (cmd.args.size() != 3 && cmd.args.size() != 4) {
-                std::cout << col::red
-                          << "  Usage: available(\"NUMBER\", LEG, \"YYYY-MM-DD\")\n"
-                          << "     or: available(\"NUMBER\", LEG, \"YYYY-MM-DD\", SEAT)\n"
-                          << col::reset;
-                continue;
-            }
+        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        {
+            static float f = 0.0f;
+            static int counter = 0;
 
-            std::string number = trim(cmd.args[0]);
-            std::string date = trim(cmd.args[2]);
-            int leg_no = 0;
-            int seat_no = 0;
+            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
 
-            try {
-                leg_no = std::stoi(trim(cmd.args[1]));
-                if (cmd.args.size() == 4) {
-                    seat_no = std::stoi(trim(cmd.args[3]));
-                }
-            } catch (const std::exception&) {
-                std::cout << col::red
-                          << "  LEG and SEAT must be numbers.\n"
-                          << "  Example: available(\"1001\", 1, \"2025-10-01\")\n"
-                          << col::reset;
-                continue;
-            }
+            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
 
-            try {
-                if (cmd.args.size() == 3) {
-                    available(db, number, leg_no, date);
-                } else {
-                    available(db, number, leg_no, date, seat_no);
-                }
-            } catch (const std::exception& e) {
-                std::cout << col::red
-                          << "  Availability error: " << e.what() << "\n"
-                          << col::reset;
-            }
+            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
-        } else if (cmd.func == "itinerary") {
-            if (cmd.args.size() != 1) {
-                std::cout << col::red << "  Usage: itinerary(\"NAME\")\n" << col::reset;
-                continue;
-            }
+            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+                counter++;
+            ImGui::SameLine();
+            ImGui::Text("counter = %d", counter);
 
-            itinerary(db, cmd.args[0]);
-        } else if (cmd.func == "util") {
-            if (cmd.args.size() != 2) {
-                std::cout << col::red << "  Usage: util\n" << col::reset;
-                continue;
-            }
-
-            util(db, cmd.args[0], cmd.args[1]);
-        } else {
-            std::cout << col::red << "  Unknown function '" << cmd.func
-                      << "'. Type 'help' for usage.\n" << col::reset;
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            ImGui::End();
         }
-    }
 
-    std::cout << col::dim << "\nGoodbye.\n" << col::reset;
+        {          
+            ImGui::Begin("Input Query");
+
+            ImGui::Text("Enter a trip source and destination to find all flights");
+            ImGui::InputText("Source", &tripSource);
+            ImGui::InputText("Destination", &tripDest);
+
+            if (ImGui::Button("Search")) {
+                show_trip_window = true;
+            }
+
+            ImGui::End();
+        }
+
+        if (show_trip_window) {
+            ImGui::Begin("Trip");
+
+            searchTrip(db, tripSource, tripDest);
+
+            ImGui::End();
+        }          
+
+        // Rendering
+        ImGui::Render();
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glfwSwapBuffers(window);
+    }
+#ifdef __EMSCRIPTEN__
+    EMSCRIPTEN_MAINLOOP_END;
+#endif
+
+    // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
     return 0;
 }

@@ -13,8 +13,8 @@
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#include "imgui.h"
 
-// ─── ANSI (re-declared here so the header is self-contained) ─────────────────
 namespace C {
     const std::string R  = "\033[0m";
     const std::string B  = "\033[1m";
@@ -64,7 +64,7 @@ static std::vector<std::string> resolveAirports(DB& db, const std::string& input
 
     // Try city name (partial match)
     sql = "SELECT airport_code FROM airports "
-          "WHERE UPPER(city) LIKE UPPER('%" + safe + "%')";
+        "WHERE UPPER(city) LIKE UPPER('%" + safe + "%')";
 
     rows = db.query(sql);
     std::vector<std::string> codes;
@@ -168,12 +168,14 @@ void searchTrip(DB& db, const std::string& srcInput, const std::string& dstInput
     auto srcCodes = resolveAirports(db, srcInput);
     auto dstCodes = resolveAirports(db, dstInput);
 
+    if (srcInput.length() != 3 || dstInput.length() != 3) {
+        return;
+    }
+
     if (srcCodes.empty()) {
-        std::cout << C::RD << "  No airport found matching '" << srcInput << "'\n" << C::R;
         return;
     }
     if (dstCodes.empty()) {
-        std::cout << C::RD << "  No airport found matching '" << dstInput << "'\n" << C::R;
         return;
     }
 
@@ -191,20 +193,40 @@ void searchTrip(DB& db, const std::string& srcInput, const std::string& dstInput
     std::string dstIn = buildInList(dstCodes);
 
     // Print resolved airports
-    auto showAirports = [&](const std::vector<std::string>& codes, const std::string& label) {
-        auto rows = db.query(
-            "SELECT airport_code, city, state, name FROM airports "
-            "WHERE airport_code IN " + buildInList(codes));
-        std::cout << C::D << "  " << label << ": ";
-        for (size_t i = 0; i < rows.size(); ++i) {
-            if (i) std::cout << " | ";
-            std::cout << rows[i]["airport_code"] << " — "
-                      << rows[i]["city"] << ", " << rows[i]["state"];
-        }
-        std::cout << C::R << "\n";
-    };
+    auto showAirports = [&](const std::vector<std::string>& codes, const std::string& label)
+        {
+            auto rows = db.query(
+                "SELECT airport_code, city, state, name FROM airports "
+                "WHERE airport_code IN " + buildInList(codes));
 
-    printHeader("ITINERARIES: " + srcInput + "  →  " + dstInput);
+            ImGui::TextDisabled("%s:", label.c_str());
+            ImGui::SameLine();
+
+            if (rows.empty())
+            {
+                ImGui::TextUnformatted("(none)");
+                return;
+            }
+
+            for (size_t i = 0; i < rows.size(); ++i)
+            {
+                const auto& r = rows[i];
+
+                if (i > 0)
+                    ImGui::SameLine();
+
+                ImGui::Text("%s — %s, %s",
+                            r.at("airport_code").c_str(),
+                            r.at("city").c_str(),
+                            r.at("state").c_str()
+                    );
+
+                if (i + 1 < rows.size())
+                    ImGui::TextUnformatted("|");
+            }
+        };
+
+    ImGui::SeparatorText(("ITINERARIES: " + srcInput + " → " + dstInput).c_str());
     showAirports(srcCodes, "Origin");
     showAirports(dstCodes, "Destination");
 
@@ -231,25 +253,59 @@ void searchTrip(DB& db, const std::string& srcInput, const std::string& dstInput
         "ORDER BY fl.scheduled_dep_time";
 
     auto direct = db.query(directSQL);
+    
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f),
+                       "✈ DIRECT FLIGHTS (%zu found)", direct.size());
 
-    std::cout << "\n" << C::B << "  ✈  DIRECT FLIGHTS (" << direct.size() << " found)\n" << C::R;
-    printDivider('-', 70);
+    ImGui::Separator();
 
     if (direct.empty()) {
-        std::cout << C::D << "  (none)\n" << C::R;
+        ImGui::TextDisabled("(none)");
     } else {
-        // Column headers
-        std::cout << "  " << C::D
-                  << pad("", 5)
-                  << pad("Flight", 10)
-                  << pad("Airline", 20)
-                  << pad("From", 6)
-                  << " → "
-                  << pad("To", 6)
-                  << pad("Dep", 10)
-                  << "Arr\n" << C::R;
-        for (size_t i = 0; i < direct.size(); ++i) {
-            printDirectRow((int)i + 1, direct[i]);
+        if (ImGui::BeginTable("direct_flights", 7,
+                              ImGuiTableFlags_Borders |
+                              ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_SizingFixedFit))
+        {
+            ImGui::TableSetupColumn("#");
+            ImGui::TableSetupColumn("Flight");
+            ImGui::TableSetupColumn("Airline");
+            ImGui::TableSetupColumn("From");
+            ImGui::TableSetupColumn("To");
+            ImGui::TableSetupColumn("Dep");
+            ImGui::TableSetupColumn("Arr");
+            ImGui::TableHeadersRow();
+
+            for (size_t i = 0; i < direct.size(); ++i)
+            {
+                const Row& r = direct[i];
+
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(ImVec4(1, 0.85f, 0.2f, 1), "[%d]", (int)i + 1);
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%s", r.at("number").c_str());
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("(%s)", r.at("airline").c_str());
+
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%s", r.at("dep_code").c_str());
+
+                ImGui::TableSetColumnIndex(4);
+                ImGui::Text("%s", r.at("arr_code").c_str());
+
+                ImGui::TableSetColumnIndex(5);
+                ImGui::Text("%s", r.at("dep_time").c_str());
+
+                ImGui::TableSetColumnIndex(6);
+                ImGui::Text("%s", r.at("arr_time").c_str());
+            }
+
+            ImGui::EndTable();
         }
     }
 
@@ -332,53 +388,216 @@ void searchTrip(DB& db, const std::string& srcInput, const std::string& dstInput
     auto interline = db.query(interlineSQL);
 
     int totalConnecting = (int)(sameFlight.size() + interline.size());
-    std::cout << "\n" << C::B << "  ✈✈ CONNECTING FLIGHTS — 1 STOP ("
-              << totalConnecting << " found)\n" << C::R;
-    printDivider('-', 70);
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("✈✈ CONNECTING FLIGHTS — 1 STOP");
+
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.40f, 0.70f, 1.00f, 1.0f),
+                       "(%d found)", totalConnecting);
 
     int idx = 1;
 
-    // Print same-flight connections
-    if (!sameFlight.empty()) {
-        std::cout << C::D << "  ── Same-flight multi-leg ──\n" << C::R;
-        for (auto& r : sameFlight) {
-            std::cout << "  " << C::YL << "[" << idx++ << "] " << C::R
-                      << C::B << r["flight_no"] << C::R
-                      << " (" << r["airline"] << ")  "
-                      << C::GR << r["dep_code"] << C::R
-                      << " [dep " << r["dep_time"] << "] "
-                      << "→ " << C::MG << r["via_code"] << C::R
-                      << " [arr " << r["via_arr_time"] << " / dep " << r["via_dep_time"] << "] "
-                      << "→ " << C::GR << r["arr_code"] << C::R
-                      << " [arr " << r["arr_time"] << "]\n";
+// ============================================================
+// SAME-FLIGHT MULTI-LEG
+// ============================================================
+
+    if (!sameFlight.empty())
+    {
+        ImGui::Spacing();
+
+        ImGui::TextDisabled("── Same-flight multi-leg ──");
+
+        if (ImGui::BeginTable(
+                "same_flight_connections",
+                8,
+                ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_BordersInnerH |
+                ImGuiTableFlags_SizingFixedFit))
+        {
+            ImGui::TableSetupColumn("#");
+            ImGui::TableSetupColumn("Flight");
+            ImGui::TableSetupColumn("Airline");
+            ImGui::TableSetupColumn("From");
+            ImGui::TableSetupColumn("Departure");
+            ImGui::TableSetupColumn("Via");
+            ImGui::TableSetupColumn("Transfer");
+            ImGui::TableSetupColumn("Arrival");
+
+            ImGui::TableHeadersRow();
+
+            for (auto& r : sameFlight)
+            {
+                ImGui::TableNextRow();
+
+                // #
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(
+                    ImVec4(1.00f, 0.85f, 0.20f, 1.0f),
+                    "[%d]",
+                    idx++);
+
+                // Flight
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextColored(
+                    ImVec4(0.40f, 0.70f, 1.00f, 1.0f),
+                    "%s",
+                    r["flight_no"].c_str());
+
+                // Airline
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("(%s)",
+                            r["airline"].c_str());
+
+                // From
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextColored(
+                    ImVec4(0.40f, 1.00f, 0.40f, 1.0f),
+                    "%s",
+                    r["dep_code"].c_str());
+
+                // Departure
+                ImGui::TableSetColumnIndex(4);
+                ImGui::Text("dep %s",
+                            r["dep_time"].c_str());
+
+                // Via
+                ImGui::TableSetColumnIndex(5);
+                ImGui::TextColored(
+                    ImVec4(1.00f, 0.40f, 1.00f, 1.0f),
+                    "%s",
+                    r["via_code"].c_str());
+
+                // Transfer
+                ImGui::TableSetColumnIndex(6);
+                ImGui::Text(
+                    "arr %s / dep %s",
+                    r["via_arr_time"].c_str(),
+                    r["via_dep_time"].c_str());
+
+                // Arrival
+                ImGui::TableSetColumnIndex(7);
+                ImGui::Text(
+                    "%s  [arr %s]",
+                    r["arr_code"].c_str(),
+                    r["arr_time"].c_str());
+            }
+
+            ImGui::EndTable();
         }
     }
 
-    // Print interline connections
-    if (!interline.empty()) {
-        std::cout << C::D << "  ── Interline (two separate flights) ──\n" << C::R;
-        for (auto& r : interline) {
-            std::cout << "  " << C::YL << "[" << idx++ << "] " << C::R
-                      << C::B << r["flight1_no"] << C::R
-                      << " (" << r["airline1"] << ")  "
-                      << C::GR << r["dep_code"] << C::R
-                      << " [dep " << r["dep_time"] << "] "
-                      << "→ " << C::MG << r["via_code"] << C::R
-                      << " [arr " << r["via_arr_time"] << "]"
-                      << "\n           then  "
-                      << C::B << r["flight2_no"] << C::R
-                      << " (" << r["airline2"] << ") "
-                      << "[dep " << r["via_dep_time"] << "] "
-                      << "→ " << C::GR << r["arr_code"] << C::R
-                      << " [arr " << r["arr_time"] << "]\n";
+// ============================================================
+// INTERLINE CONNECTIONS
+// ============================================================
+
+    if (!interline.empty())
+    {
+        ImGui::Spacing();
+
+        ImGui::TextDisabled(
+            "── Interline (two separate flights) ──");
+
+        if (ImGui::BeginTable(
+                "interline_connections",
+                9,
+                ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_BordersInnerH |
+                ImGuiTableFlags_SizingFixedFit))
+        {
+            ImGui::TableSetupColumn("#");
+            ImGui::TableSetupColumn("Flight 1");
+            ImGui::TableSetupColumn("Airline");
+            ImGui::TableSetupColumn("From");
+            ImGui::TableSetupColumn("Dep");
+            ImGui::TableSetupColumn("Via");
+            ImGui::TableSetupColumn("Arr @ Via");
+            ImGui::TableSetupColumn("Flight 2");
+            ImGui::TableSetupColumn("Final");
+
+            ImGui::TableHeadersRow();
+
+            for (auto& r : interline)
+            {
+                ImGui::TableNextRow();
+
+                // #
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(
+                    ImVec4(1.00f, 0.85f, 0.20f, 1.0f),
+                    "[%d]",
+                    idx++);
+
+                // Flight 1
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextColored(
+                    ImVec4(0.40f, 0.70f, 1.00f, 1.0f),
+                    "%s",
+                    r["flight1_no"].c_str());
+
+                // Airline 1
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("(%s)",
+                            r["airline1"].c_str());
+
+                // From
+                ImGui::TableSetColumnIndex(3);
+                ImGui::TextColored(
+                    ImVec4(0.40f, 1.00f, 0.40f, 1.0f),
+                    "%s",
+                    r["dep_code"].c_str());
+
+                // Departure
+                ImGui::TableSetColumnIndex(4);
+                ImGui::Text("dep %s",
+                            r["dep_time"].c_str());
+
+                // Via
+                ImGui::TableSetColumnIndex(5);
+                ImGui::TextColored(
+                    ImVec4(1.00f, 0.40f, 1.00f, 1.0f),
+                    "%s",
+                    r["via_code"].c_str());
+
+                // Arrive via
+                ImGui::TableSetColumnIndex(6);
+                ImGui::Text("arr %s",
+                            r["via_arr_time"].c_str());
+
+                // Flight 2
+                ImGui::TableSetColumnIndex(7);
+
+                ImGui::TextColored(
+                    ImVec4(0.40f, 0.70f, 1.00f, 1.0f),
+                    "%s",
+                    r["flight2_no"].c_str());
+
+                ImGui::SameLine();
+
+                ImGui::Text(
+                    "(%s) dep %s",
+                    r["airline2"].c_str(),
+                    r["via_dep_time"].c_str());
+
+                // Final arrival
+                ImGui::TableSetColumnIndex(8);
+
+                ImGui::Text(
+                    "%s [arr %s]",
+                    r["arr_code"].c_str(),
+                    r["arr_time"].c_str());
+            }
+
+            ImGui::EndTable();
         }
     }
 
-    if (totalConnecting == 0) {
-        std::cout << C::D << "  (none)\n" << C::R;
+    if (totalConnecting == 0)
+    {
+        ImGui::TextDisabled("(none)");
     }
 
-    std::cout << "\n";
+    ImGui::Spacing();
 }
 
 // Itinerary check

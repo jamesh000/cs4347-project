@@ -1,0 +1,25 @@
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra
+
+# MySQL/MariaDB connector flags.
+# On MSYS2 MinGW64 this usually works with the fallback below.
+MYSQL_CFLAGS := $(shell mysql_config --cflags 2>/dev/null || mariadb_config --cflags 2>/dev/null)
+MYSQL_LIBS   := $(shell mysql_config --libs 2>/dev/null || mariadb_config --libs 2>/dev/null)
+
+ifeq ($(strip $(MYSQL_LIBS)),)
+MYSQL_CFLAGS = -I/mingw64/include/mariadb
+MYSQL_LIBS   = -L/mingw64/lib -lmariadb
+endif
+
+TARGET = flightdb
+
+# Added availability.cpp only; existing project files are unchanged.
+SRCS = main.cpp availability.cpp
+
+all: $(TARGET)
+
+$(TARGET): $(SRCS) db.h queries.h availability.h
+	$(CXX) $(CXXFLAGS) $(SRCS) -o $(TARGET) $(MYSQL_CFLAGS) $(MYSQL_LIBS)
+
+clean:
+	rm -f $(TARGET) *.o

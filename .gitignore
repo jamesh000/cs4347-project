@@ -70,3 +70,6 @@ Testing/
 
 # executable
 flightdb
+
+# imgui
+imgui/
